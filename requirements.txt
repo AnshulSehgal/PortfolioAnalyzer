@@ -1,0 +1,4 @@
+alpha-vantage==2.0.0
+nsepy==0.8
+numpy==1.14.2
+pandas==0.25.3
