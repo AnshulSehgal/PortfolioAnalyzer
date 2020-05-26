@@ -187,6 +187,9 @@ def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_
                     cash_out = (avl_qty / stocks[tkr_dta]['qty']) * stocks[tkr_dta]['amt']
                     stocks[tkr_dta]['amt'] = (1 - avl_qty / stocks[tkr_dta]['qty']) * stocks[tkr_dta]['amt']
                     stocks[tkr_dta]['qty'] = stocks[tkr_dta]['qty'] - avl_qty
+                # If provided price is not between high and low use average price
+                if (price < row['low']) & (price > row['high']):
+                    price = row['avg_price']
                 investment = price * avl_qty
                 if len(cumulative_invested_amount) > 0:
                     cumulative_invested_amount.append(cumulative_invested_amount[-1] - cash_out)
