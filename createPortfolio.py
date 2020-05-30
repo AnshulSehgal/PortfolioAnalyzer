@@ -184,6 +184,8 @@ def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_
                         avl_qty = qty
                     else:
                         avl_qty = stocks[tkr_dta]['qty']
+                # Only sell if there is stock available to sell
+                if avl_qty > 0:
                     cash_out = (avl_qty / stocks[tkr_dta]['qty']) * stocks[tkr_dta]['amt']
                     stocks[tkr_dta]['amt'] = (1 - avl_qty / stocks[tkr_dta]['qty']) * stocks[tkr_dta]['amt']
                     stocks[tkr_dta]['qty'] = stocks[tkr_dta]['qty'] - avl_qty
