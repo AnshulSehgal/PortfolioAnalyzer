@@ -5,7 +5,6 @@ from alpha_vantage.timeseries import TimeSeries
 from itertools import compress
 from nsepy import get_history
 
-
 # Global variables
 filename = 'alerts.csv'
 starting_amt = 1000000
@@ -14,32 +13,32 @@ dt = str(datetime.date(datetime.now()))
 api_key = 'HKWHRTVR81SPWWI9'
 
 
-def update_prices(tickers, stock_history_df, key, start_date, end_date):
+def update_prices(tickers, stock_history_df, start_date, end_date):
     """
-    :param tickers:
-    :param stock_history_df:
-    :param key:
-    :param start_date:
-    :param end_date:
-    :return: An updated stock_history_df with prices till today
+    :param tickers: list of ticker for which historical prices are needed
+    :param stock_history_df: An empty dataframe or a dataframe containing historical
+    prices which can be appended with latest prices
+    :param start_date: Start data from which you need to pull historical prices
+    :param end_date: Last date till which you need to pull historical prices
+    :return: An updated stock_history_df with prices till today fetched from NSE using nsepy
     """
     print('---------- Updating Prices for all stocks to current date -------------')
     start_date = date(int(start_date.split("-")[0]), int(start_date.split("-")[1]), int(start_date.split("-")[2]))
     end_date = date(int(end_date.split("-")[0]), int(end_date.split("-")[1]), int(end_date.split("-")[2]))
 
-    #ts = TimeSeries(key, output_format='pandas', retries=5)
+    # ts = TimeSeries(key, output_format='pandas', retries=5)
     for ticker in tickers:
         tk = ticker.split(".")[0]
         print('---------- Fetching prices for {} -----------'.format(ticker))
         tkr = get_history(symbol=tk, start=start_date, end=end_date)
-        #tkr, meta = ts.get_daily(symbol=ticker)
+        # tkr, meta = ts.get_daily(symbol=ticker)
         tkr = tkr.reset_index()[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
         tkr.columns = ['DATE', 'open', 'high', 'low', 'CLOSING_RATES', 'volume']
         tkr['TICKER'] = ticker
         tkr['DATE'] = pd.to_datetime(tkr['DATE']).dt.strftime('%Y-%m-%d')
         stock_history_df = stock_history_df.append(tkr)
         stock_history_df.drop_duplicates(inplace=True)
-        #time.sleep(12)
+        # time.sleep(12)
     return stock_history_df
 
 
@@ -89,7 +88,7 @@ def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_
              and a dataframe with historical prices udpated
     """
     # Load the stock prices
-    #ts = TimeSeries(key, output_format='pandas')
+    # ts = TimeSeries(key, output_format='pandas')
     stock_history_df = stock_history_df.sort_values(by=['DATE'], ascending=False)
     df_prices = pd.DataFrame()
     tickers = alerts_df.TICKER.unique()
@@ -272,15 +271,36 @@ def load_data(alerts_filename):
     return alerts, stock_history
 
 
-def get_nifty(key):
-    ts = TimeSeries(key, output_format='pandas')
-    nfty, meta = ts.get_monthly(symbol='^NSEI')
-    nfty = nfty.reset_index()
-    nfty.columns = ['DATE', 'NIFTY_50_VALUE_AT_OPENING', 'high', 'low', 'NIFTY_50_VALUE_AT_CLOSING', 'volume']
-    nfty['NIFTY_RETURNS'] = (nfty['NIFTY_50_VALUE_AT_CLOSING'] - nfty['NIFTY_50_VALUE_AT_OPENING']) \
-                            / nfty['NIFTY_50_VALUE_AT_OPENING']
-    # nfty['TICKER'] = 'NIFTY 50'
-    return nfty
+def get_nifty(start_date, end_date):
+    """
+    :param start_date: start date from which yuo want to pull NIFT 50 prices
+    :param end_date: last date till which you want to pull nifty 50 prices
+    :return: A pandas dataframe which provides monthly returns of NIFTY 50
+    """
+
+    print('---------- Fetching NIFTY 50 prices-------------')
+    start_date = date(int(start_date.split("-")[0]), int(start_date.split("-")[1]), 1)
+    end_date = date(int(end_date.split("-")[0]), int(end_date.split("-")[1]), int(end_date.split("-")[2]))
+
+    nifty = get_history(symbol='NIFTY 50', start=start_date, end=end_date, index=True)
+    # tkr, meta = ts.get_daily(symbol=ticker)
+    nifty = nifty.reset_index()[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
+    nifty.columns = ['DATE', 'NIFTY_50_VALUE_AT_OPENING', 'high', 'low', 'NIFTY_50_VALUE_AT_CLOSING', 'volume']
+    nifty['DATE'] = pd.to_datetime(nifty['DATE']).dt.strftime('%Y-%m-%d')
+    nifty['MONTH'] = pd.to_datetime(nifty['DATE']).dt.to_period('m')
+    nifty = nifty.groupby('MONTH').agg({'DATE': 'max',
+                                        'NIFTY_50_VALUE_AT_OPENING': 'first',
+                                        'high': 'max',
+                                        'low': 'min',
+                                        'NIFTY_50_VALUE_AT_CLOSING': 'last'}).reset_index()
+
+    nifty.drop(columns=['MONTH'], inplace=True)
+
+    # calculate monthly returns
+    nifty['NIFTY_RETURNS'] = (nifty['NIFTY_50_VALUE_AT_CLOSING'] - nifty['NIFTY_50_VALUE_AT_OPENING']) \
+                             / nifty['NIFTY_50_VALUE_AT_OPENING']
+
+    return nifty
 
 
 def analyze_portfolio(trans, idx, init_amt, bank_int):
@@ -326,12 +346,10 @@ alerts, stock_history = load_data(alerts_filename=filename)
 
 stock_history = update_prices(tickers=alerts['TICKER'].unique().tolist(),
                               stock_history_df=stock_history,
-                              key=api_key,
                               start_date=alerts.DATE.min(),
                               end_date=dt)
 
 stock_history.to_csv('archive/stock_history_{}.csv'.format(dt), index=False)
-
 
 df_trans, stock_history = generate_transactions(alerts_df=alerts, stock_history_df=stock_history,
                                                 key=api_key,
@@ -339,9 +357,8 @@ df_trans, stock_history = generate_transactions(alerts_df=alerts, stock_history_
                                                 int_rate=interest)
 
 # Get index prices
-nifty = get_nifty(key=api_key)
+nifty = get_nifty(start_date=alerts.DATE.min(), end_date=dt)
 nifty.to_csv('output/NIFTY_50_{}.csv'.format(dt), index=False)
-
 
 portfolio, roi = analyze_portfolio(df_trans, nifty, starting_amt, interest)
 
