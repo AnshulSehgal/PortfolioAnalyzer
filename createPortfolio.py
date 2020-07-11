@@ -165,6 +165,7 @@ def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_
     open_position_eod = []
     stocks = dict()
     print('---------- Calculating Invested amount and amount in bank after each transaction -------------')
+    df_prices.sort_values(by=['DATE', 'TYPE'], inplace=True)
     for _, row in df_prices.iterrows():
 
         act = row['TYPE']
@@ -307,9 +308,9 @@ def analyze_portfolio(trans, idx, init_amt, bank_int):
     # Formatting as per requirements
     trans['MONTH'] = pd.to_datetime(trans['DATE']).dt.to_period('m')
     col_order = ['MONTH', 'TICKER', 'DATE', 'TYPE', 'RATE', 'QUANTITY',
-                 'invested_amount', 'cumulative_amount_invested', 'AMOUNT_IN_BANK',
-                 'CLOSING_RATES', 'closing_value_of_stock', 'VALUE_OF_PORTFOLIO_AT_CLOSING',
-                 'CUMULATIVE_VALUE_OF_STOCKS_AT_CLOSING', 'avg_price', 'high', 'low', 'month_end', 'open', 'volume']
+                 'invested_amount', 'CUMULATIVE_VALUE_OF_STOCKS_AT_CLOSING', 'AMOUNT_IN_BANK',
+                 'VALUE_OF_PORTFOLIO_AT_CLOSING', 'CLOSING_RATES', 'closing_value_of_stock',
+                 'cumulative_amount_invested', 'avg_price', 'high', 'low', 'month_end', 'open', 'volume']
 
     trans = trans[col_order]
 
