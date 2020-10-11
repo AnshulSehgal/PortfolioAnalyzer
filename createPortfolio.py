@@ -4,9 +4,11 @@ from datetime import datetime, date
 from alpha_vantage.timeseries import TimeSeries
 from itertools import compress
 from nsepy import get_history
+import math
 
 # Global variables
 filename = 'alerts.csv'
+split_bonus = 'splits.csv'
 starting_amt = 1000000
 interest = 0.06
 dt = str(datetime.date(datetime.now()))
@@ -77,10 +79,11 @@ def insert_month_ends(df, m):
     return df
 
 
-def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_rate):
+def generate_transactions(alerts_df, stock_history_df, splits_df, key, initial_amount, int_rate):
     """
     :param alerts_df: a pandas dataframe of alerts
     :param stock_history_df: dataframe of historical stock prices
+    :param splits_df: a dataframe which provides if a stock was split or consolidated
     :param key: API key for alpha vantage
     :param initial_amount: Initial amount to start with
     :param int_rate: Annual interest rate for amount in bank
@@ -163,6 +166,7 @@ def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_
     invested_amount = []
     closing_value = []
     open_position_eod = []
+    updated_stocks = []
     stocks = dict()
     print('---------- Calculating Invested amount and amount in bank after each transaction -------------')
     df_prices.sort_values(by=['DATE', 'TYPE'], inplace=True)
@@ -233,11 +237,24 @@ def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_
             invested_amount.append(0)
             closing_value.append(0)
         open_pos = {stk: pos for (stk, pos) in stocks.items() if pos['qty'] > 0}
+
+        for stk, pos in open_pos.items():
+
+            if stk not in updated_stocks:
+                # changing quantity if the stock was split of consolidated on or before current date
+                is_split = splits_df.loc[(splits_df['TICKER'] == stk) & (splits_df['DATE'] <= row['DATE']), :]
+                if is_split.shape[0] > 0:
+                    stocks[stk]['qty'] = math.floor(pos['qty'] * is_split.tail(1)['MULTIPLIER'])
+                    updated_stocks.append(stk)
+
+        open_pos = {stk: pos for (stk, pos) in stocks.items() if pos['qty'] > 0}
         eod = 0
         for stk, pos in open_pos.items():
+
             eod += stock_history_df[(stock_history_df['TICKER'] == stk) &
-                                    (stock_history_df['DATE'] <= row['DATE'])].head(1)['CLOSING_RATES'].values[0] * pos[
-                       'qty']
+                                    (stock_history_df['DATE'] <= row['DATE'])].head(1)['CLOSING_RATES'].values[0] * \
+                                     pos['qty']
+
         open_position_eod.append(eod)
 
     df_prices['AMOUNT_IN_BANK'] = amount_in_bank
@@ -251,14 +268,22 @@ def generate_transactions(alerts_df, stock_history_df, key, initial_amount, int_
     return df_prices, stock_history_df
 
 
-def load_data(alerts_filename):
+def load_data(alerts_filename, splits_filename):
     # Load the alerts and historical data
     try:
         print('---------- Loading alerts -----------')
         alerts = pd.read_csv('input/{}'.format(alerts_filename))
         alerts['DATE'] = pd.to_datetime(alerts['DATE']).dt.strftime('%Y-%m-%d')
     except FileNotFoundError:
-        print("-------- The alert file dosen't exist. Please store the file in project folder and re-run -----------")
+        print("-------- The alert file doesn't exist. Please store the file in project folder and re-run -----------")
+        exit()
+
+    try:
+        print('---------- Loading splits/bonuses -----------')
+        splits = pd.read_csv('input/{}'.format(splits_filename))
+        splits['DATE'] = pd.to_datetime(splits['DATE']).dt.strftime('%Y-%m-%d')
+    except FileNotFoundError:
+        print("-------- The splits file doesn't exist. Please store the file in project folder and re-run -----------")
         exit()
 
     try:
@@ -269,7 +294,7 @@ def load_data(alerts_filename):
         print("------- Stock history not available ... It will be created now ----------")
         stock_history = pd.DataFrame()
 
-    return alerts, stock_history
+    return alerts, stock_history, splits
 
 
 def get_nifty(start_date, end_date):
@@ -343,7 +368,7 @@ def analyze_portfolio(trans, idx, init_amt, bank_int):
     return trans, portfolio_stats
 
 
-alerts, stock_history = load_data(alerts_filename=filename)
+alerts, stock_history, splits = load_data(alerts_filename=filename, splits_filename=split_bonus)
 
 stock_history = update_prices(tickers=alerts['TICKER'].unique().tolist(),
                               stock_history_df=stock_history,
@@ -353,6 +378,7 @@ stock_history = update_prices(tickers=alerts['TICKER'].unique().tolist(),
 stock_history.to_csv('archive/stock_history_{}.csv'.format(dt), index=False)
 
 df_trans, stock_history = generate_transactions(alerts_df=alerts, stock_history_df=stock_history,
+                                                splits_df=splits,
                                                 key=api_key,
                                                 initial_amount=starting_amt,
                                                 int_rate=interest)
