@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, date
-from alpha_vantage.timeseries import TimeSeries
 from itertools import compress
 from nsepy import get_history
 import math
