@@ -382,6 +382,11 @@ df_trans, stock_history = generate_transactions(alerts_df=alerts, stock_history_
                                                 initial_amount=starting_amt,
                                                 int_rate=interest)
 
+df_trans.to_csv('output/transactions_{}.csv'.format(dt), index=False)
+
+#df_trans = pd.read_csv('output/transactions_2021-06-15.csv')
+#df_trans['DATE'] = pd.to_datetime(df_trans['DATE']).dt.strftime('%Y-%m-%d')
+
 # Get index prices
 nifty = get_nifty(start_date=alerts.DATE.min(), end_date=dt)
 nifty.to_csv('output/NIFTY_50_{}.csv'.format(dt), index=False)
